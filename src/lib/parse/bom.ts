@@ -55,7 +55,7 @@ export function parseBom(file: string, text: string): ParseResult {
       columns.value = 1;
       columns.description = 2;
       startIndex = firstContentIndex;
-      notes.push("No header row detected — read columns as reference, value, description.");
+      notes.push("No header row detected, so columns were read as reference, value, description.");
     } else {
       return {
         parts,

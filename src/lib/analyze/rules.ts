@@ -133,7 +133,7 @@ export function describeLimit(limit: Limit | undefined, fallback: string): strin
 const accessFor = (ctx: DesignContext, net: Net): string => {
   const probed = ctx.probedNets().has(net.name.toUpperCase());
   if (probed) return `${net.name} via test point`;
-  if (ctx.hasConnectivity) return `${net.name} — no test point on this net, needs a probe target`;
+  if (ctx.hasConnectivity) return `${net.name} (no test point on this net, needs a probe target)`;
   return net.name;
 };
 
@@ -175,9 +175,9 @@ const shortsCheck: Rule = (ctx) => {
       purpose: "Find a shorted rail before power turns a cheap fault into a scrapped board.",
       access: ground
         ? `${rails.map((r) => r.name).join(", ")} against ${ground.name}`
-        : "Rails against ground — no ground net was found in the design files",
+        : "Rails against ground, but no ground net was found in the design files",
       stimulus: "Measure resistance with the board unpowered",
-      expected: "Above the engineering-approved floor — no rail near zero ohms",
+      expected: "Above the engineering-approved floor, with no rail near zero ohms",
       instrument: "DMM or fixture-side continuity channel",
       confidence: ground ? "review" : "specialist",
       basis: ground ? "detected" : "unresolved",
@@ -217,7 +217,7 @@ const powerRails: Rule = (ctx) => {
       expected: describeLimit(
         limit,
         net.nominalV !== undefined
-          ? `Near ${net.nominalV} V — no tolerance found in the requirements`
+          ? `Near ${net.nominalV} V, no tolerance found in the requirements`
           : "No limit stated for this rail",
       ),
       instrument: "Programmable PSU and DMM",
@@ -284,7 +284,7 @@ const i2cScan: Rule = (ctx) => {
         ? `${idLimit.note}${refs.length > 1 ? ", plus the other expected addresses" : ""}`
         : refs.length
           ? `All ${refs.length} expected device${refs.length === 1 ? "" : "s"} acknowledge`
-          : "Expected address list acknowledges — addresses not stated in the requirements",
+          : "Expected address list acknowledges, though the addresses were not stated in the requirements",
       instrument: "Test controller running the manufacturing firmware",
       confidence: idLimit ? "high" : "review",
       basis: idLimit ? basis : basis === "detected" ? "detected" : "inferred",
@@ -499,7 +499,7 @@ const analogCheck: Rule = (ctx) => {
       purpose: "Verify the analog path and the reference, which digital checks won't touch.",
       access: analog.map((n) => n.name).join(", "),
       stimulus: "Drive a known level from the fixture and read it back through the ADC",
-      expected: "Reading within the converter's error budget — budget not stated in the sources",
+      expected: "Reading within the converter's error budget, which is not stated in the sources",
       instrument: "Fixture DAC or precision divider",
       confidence: "specialist",
       basis: basis === "detected" ? "detected" : "unresolved",
@@ -527,7 +527,7 @@ const rfCheck: Rule = (ctx) => {
       purpose: "Radiated performance cannot be inferred from connectivity checks.",
       access: rfNets.length ? rfNets.map((n) => n.name).join(", ") : "Antenna feed",
       stimulus: "Conducted power and frequency measurement, defined by a test engineer",
-      expected: "Not derivable from these files — needs calibrated limits and a guard band",
+      expected: "Not derivable from these files. Needs calibrated limits and a guard band",
       instrument: "Spectrum analyser or a vendor RF test mode",
       confidence: "specialist",
       basis: "unresolved",

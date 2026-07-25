@@ -88,7 +88,7 @@ export function parseKicadSchematic(file: string, text: string): ParseResult {
   }
 
   if (!parts.length && !netMap.size) {
-    notes.push("No symbols or net labels found — the file may be a fragment or an unsupported KiCad version.");
+    notes.push("No symbols or net labels found. The file may be a fragment or an unsupported KiCad version.");
   } else {
     notes.push(
       `Schematic: ${parts.length} part${parts.length === 1 ? "" : "s"}, ${netMap.size} named net${netMap.size === 1 ? "" : "s"}. Pin-level connectivity needs a netlist export.`,

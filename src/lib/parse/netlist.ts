@@ -66,7 +66,7 @@ export function parsePlainNetlist(file: string, text: string): ParseResult {
       ? `Netlist: ${nets.length} net${nets.length === 1 ? "" : "s"}. ${
           nets.some((n) => n.nodes.some((node) => node.pin !== "?"))
             ? "Pin numbers included."
-            : "No pin numbers — add `U1.5` style nodes for pin-level fixture mapping."
+            : "No pin numbers. Add `U1.5` style nodes for pin-level fixture mapping."
         }`
       : "No net lines recognised. Expected `NET_NAME: REF REF` per line.",
   );

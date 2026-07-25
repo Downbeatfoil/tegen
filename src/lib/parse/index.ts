@@ -48,7 +48,7 @@ export function parseSource(file: SourceFile): ParseResult {
       return {
         parts: [],
         nets: [],
-        notes: ["Read as requirements text — scanned for measurable limits."],
+        notes: ["Read as requirements text, scanned for measurable limits."],
         kind: "requirements",
       };
     default:

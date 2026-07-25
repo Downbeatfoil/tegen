@@ -60,7 +60,7 @@ export function useCountUp(value: number, duration = 850): number {
 
 const BASIS_TITLE: Record<Basis, string> = {
   detected: "Read directly from your design files",
-  inferred: "Assumed from a naming convention or common practice — check it",
+  inferred: "Assumed from a naming convention or common practice, so check it",
   unresolved: "Nothing in the sources answers this. An engineer has to supply it",
 };
 

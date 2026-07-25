@@ -105,7 +105,7 @@ function buildInterfaceMap(ctx: DesignContext, tests: TestStep[]): InterfaceRow[
     probed.has(netName.toUpperCase())
       ? "Pogo pin onto the existing test point"
       : ctx.hasConnectivity
-        ? "No test point — add a pad or accept a clip during the next revision"
+        ? "No test point, so add a pad or accept a clip during the next revision"
         : "Probe target not confirmed; needs a netlist to place";
 
   // Ground first. Two contacts, listed explicitly rather than left as a gap in
@@ -272,7 +272,7 @@ function buildRisks(
       id: "unprobed-critical-nets",
       level: "high",
       title: `${unprobed.length} critical net${unprobed.length === 1 ? " has" : "s have"} no test point`,
-      detail: `${unprobed.map((n) => n.name).join(", ")} — ${unprobed.length === 1 ? "this net is" : "these are"} needed for power-up or programming but no TP part connects to ${unprobed.length === 1 ? "it" : "them"}.`,
+      detail: `${unprobed.map((n) => n.name).join(", ")}. ${unprobed.length === 1 ? "This net is" : "These are"} needed for power-up or programming but no TP part connects to ${unprobed.length === 1 ? "it" : "them"}.`,
       action: "Add test pads on these nets, or accept a manual clip and the cycle time that costs.",
       evidence: unprobed.flatMap((n) => n.evidence.slice(0, 1)).slice(0, 4),
     });
@@ -326,7 +326,7 @@ function buildRisks(
       id: "specialist-steps",
       level: "high",
       title: `${specialist.length} step${specialist.length === 1 ? "" : "s"} need${specialist.length === 1 ? "s" : ""} a test engineer`,
-      detail: `${specialist.map((t) => t.name).join(", ")} — these involve calibrated instruments or guard bands that can't be derived from design files.`,
+      detail: `${specialist.map((t) => t.name).join(", ")}. These involve calibrated instruments or guard bands that can't be derived from design files.`,
       action: "Get these specified by someone who has released this measurement before.",
       evidence: [],
     });

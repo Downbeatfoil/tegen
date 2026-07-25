@@ -171,7 +171,8 @@ export const PART_CLASS_LABEL: Record<PartClass, string> = {
  * a board has 200 decoupling caps would be noise, not signal.
  */
 export function untestableReason(klass: PartClass): string | undefined {
-  if (klass === "passive") return "Passive — covered indirectly by rail and functional checks, not individually probed";
-  if (klass === "testpoint") return "Test point — provides access, not a device under test";
+  if (klass === "passive")
+    return "Passive, covered indirectly by rail and functional checks rather than individually probed";
+  if (klass === "testpoint") return "Test point, which provides access rather than being a device under test";
   return undefined;
 }

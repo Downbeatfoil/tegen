@@ -204,7 +204,7 @@ export default function DraftView({ draft, onUpdateTest, onExport, sourceNotes }
                   />
                 </div>
                 <p style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 8 }}>
-                  Passives and test points are left out of the denominator on purpose — nobody probes every
+                  Passives and test points are left out of the denominator on purpose. Nobody probes every
                   decoupling cap, and counting them would make this number meaningless.
                 </p>
               </div>
@@ -302,7 +302,7 @@ export default function DraftView({ draft, onUpdateTest, onExport, sourceNotes }
                             ? `≥ ${limit.min} ${limit.unit}`
                             : limit.nominal !== undefined
                               ? `${limit.nominal} ${limit.unit}`
-                              : "—"}
+                              : "n/a"}
                     </span>
                     <BasisBadge basis={limit.basis} />
                   </div>

@@ -20,7 +20,10 @@ const RANGE = new RegExp(
   String.raw`\bbetween\s+(${NUM})\s*(${UNIT})?\s*(?:and|to|through|–|—)\s*(${NUM})\s*(${UNIT})`,
   "i",
 );
-const SPAN = new RegExp(String.raw`\b(${NUM})\s*(?:${UNIT})?\s*(?:–|—|-|to)\s*(${NUM})\s*(${UNIT})\b`, "i");
+// Group positions must line up with RANGE above: number, optional unit,
+// number, unit. The reader below indexes them positionally, so a non-capturing
+// group here silently shifts every limit written as "3.2 V to 3.4 V".
+const SPAN = new RegExp(String.raw`\b(${NUM})\s*(${UNIT})?\s*(?:–|—|-|to)\s*(${NUM})\s*(${UNIT})\b`, "i");
 const TOLERANCE = new RegExp(String.raw`\b(${NUM})\s*(${UNIT})\s*(?:±|\+/-|\+-)\s*(${NUM})\s*(%|${UNIT})`, "i");
 const MAXIMUM = new RegExp(
   String.raw`\b(?:under|below|less than|no more than|not exceed|at most|max(?:imum)?(?:\s+of)?|within|faster than|shorter than)\s+(${NUM})\s*(${UNIT})`,
@@ -222,7 +225,7 @@ export function parseRequirements(file: string, text: string, nets: Net[]): Limi
           net,
           nominal: value.value,
           unit: value.unit,
-          note: "Nominal stated without a tolerance — needs a pass band before release",
+          note: "Nominal stated without a tolerance, so it needs a pass band before release",
         });
         return;
       }

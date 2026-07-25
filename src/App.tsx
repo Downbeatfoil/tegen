@@ -49,7 +49,7 @@ export default function App() {
     const unknown = parsed.filter((f) => f.kind === "unknown");
     if (skipped > 0) {
       setNotice({
-        text: `Skipped ${skipped} file${skipped === 1 ? "" : "s"} — text formats only, under 4 MB.`,
+        text: `Skipped ${skipped} file${skipped === 1 ? "" : "s"}. Text formats only, under 4 MB.`,
         tone: "warn",
       });
     } else if (unknown.length) {
@@ -73,7 +73,7 @@ export default function App() {
     setDraft(null);
     projectId.current = crypto.randomUUID();
     setNotice({
-      text: "Sample loaded — a KiCad netlist with pin-level connectivity, plus a BOM. Generate to see it worked through.",
+      text: "Sample loaded: a KiCad netlist with pin-level connectivity, plus a BOM. Generate to see it worked through.",
       tone: "info",
     });
   }, []);
@@ -86,7 +86,7 @@ export default function App() {
     const result = buildDraft({ projectName, files, requirements });
     setDraft(result);
     setNotice({
-      text: `Done — ${result.tests.length} steps, ${result.risks.length} open risks. Nothing left this browser.`,
+      text: `Done. ${result.tests.length} steps, ${result.risks.length} open risks. Nothing left this browser.`,
       tone: "info",
     });
 
@@ -195,7 +195,7 @@ export default function App() {
           </div>
           <div>
             <strong>0</strong>
-            <span>bytes uploaded — there is no server in this project to send a design to</span>
+            <span>bytes uploaded, because there is no server in this project to send a design to</span>
           </div>
           <div>
             <strong>5</strong>
@@ -215,7 +215,7 @@ export default function App() {
                 <h2>Give it what you already have.</h2>
               </div>
               <p>
-                A netlist is the useful one — it carries which pin of which part every signal lands on, so
+                A netlist is the useful one, because it carries which pin of which part every signal lands on, so
                 the fixture map is read rather than guessed. A BOM and requirements text fill in the rest.
                 Everything is parsed here in the page.
               </p>
@@ -258,7 +258,7 @@ export default function App() {
                     <h3>Nothing generated yet</h3>
                     <p>
                       Load the sample board to see a worked example: an RP2040 with an I²C sensor, an SPI
-                      IMU, CAN and USB-C. It comes back with real gaps in it — two parts nothing covers and
+                      IMU, CAN and USB-C. It comes back with real gaps in it: two parts nothing covers, and
                       one rail limit that had to be assumed.
                     </p>
                     <button className="btn btn-primary" onClick={loadSample}>
