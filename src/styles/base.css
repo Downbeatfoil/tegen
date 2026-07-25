@@ -1,0 +1,172 @@
+/* Design tokens and reset.
+   The look is borrowed from bench instruments: dark panel, hard edges, one
+   phosphor accent, and monospace for anything that is a measurement. */
+
+:root {
+  --bg: #070809;
+  --bg-panel: #0c0e10;
+  --bg-raised: #121517;
+  --bg-input: #0e1113;
+  --bg-hover: #171b1e;
+
+  --line: #1c2023;
+  --line-bright: #2a3035;
+  --line-accent: #3d4b1f;
+
+  --text: #e9ebec;
+  --text-dim: #8d949a;
+  --text-faint: #5a6169;
+
+  --signal: #ccff3d;
+  --signal-ink: #0a0c06;
+  --signal-dim: #93b82c;
+  --signal-glow: rgba(204, 255, 61, 0.14);
+
+  --warn: #ffb340;
+  --warn-dim: rgba(255, 179, 64, 0.12);
+  --danger: #ff5f48;
+  --danger-dim: rgba(255, 95, 72, 0.12);
+  --ok: #57d98a;
+  --ok-dim: rgba(87, 217, 138, 0.12);
+
+  --sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --pad: 24px;
+  --max: 1420px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Faint engineering grid, like graph paper under the panel. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--mono);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+/* Thin scrollbars so long tables don't shout. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-bright) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line-bright);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a4249;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

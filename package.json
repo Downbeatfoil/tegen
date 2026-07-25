@@ -1,0 +1,28 @@
+{
+  "name": "fixtureforge",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn PCB design evidence into a reviewable production-test draft. Runs entirely in the browser.",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "check": "tsc -b"
+  },
+  "dependencies": {
+    "animejs": "^4.5.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0"
+  }
+}
