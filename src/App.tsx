@@ -142,8 +142,8 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-in">
           <a className="brand" href="#top">
-            <span className="brand-mark">FF</span>
-            FixtureForge
+            <span className="brand-mark">TG</span>
+            Tegen
           </a>
           <nav className="topbar-nav">
             <a href="#workspace">Workspace</a>
@@ -164,7 +164,7 @@ export default function App() {
                 The test plan is already in your <em>netlist</em>.
               </h1>
               <p className="hero-lede">
-                FixtureForge reads a KiCad export and drafts the production test sequence, the fixture
+                Tegen reads a KiCad export and drafts the production test sequence, the fixture
                 pinout, and the list of parts nothing tests. Then it shows you the file and line behind
                 every claim, so you can argue with it instead of trusting it.
               </p>
@@ -314,9 +314,9 @@ export default function App() {
         <footer>
           <div className="shell footer-in">
             <div className="footer-brand">
-              <span className="brand-mark">FF</span>
+              <span className="brand-mark">TG</span>
               <div>
-                <strong>FixtureForge</strong>
+                <strong>Tegen</strong>
                 <span>Production test planning for small hardware teams</span>
               </div>
             </div>

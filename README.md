@@ -1,10 +1,10 @@
-# FixtureForge
+# Tegen
 
 Reads a PCB design and drafts the production test for it — the sequence, the fixture pinout, the pass/fail limits, and the list of parts nothing tests. Then it shows you the file and line behind every claim, so you can argue with it instead of trusting it.
 
 Runs entirely in the browser. There is no server in this project, so a design file has nowhere to go even if it wanted one.
 
-**[Live demo](https://downbeatfoil.github.io/fixtureforge/)** · load the sample board to see a worked example.
+**[Live demo](https://downbeatfoil.github.io/tegen/)** · load the sample board to see a worked example.
 
 ---
 
@@ -14,7 +14,7 @@ When a board goes from working prototype to production, someone senior has to tu
 
 That usually happens under an NPI deadline, in a spreadsheet, from scratch, every time.
 
-Most of the information needed is already sitting in the netlist. FixtureForge reads it out.
+Most of the information needed is already sitting in the netlist. Tegen reads it out.
 
 ## What it actually does
 

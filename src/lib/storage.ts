@@ -7,7 +7,7 @@
 
 import type { StoredProject } from "./types";
 
-const KEY = "fixtureforge.projects.v1";
+const KEY = "tegen.projects.v1";
 const MAX_PROJECTS = 12;
 
 function safeParse(raw: string | null): StoredProject[] {
