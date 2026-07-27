@@ -4,7 +4,7 @@ Reads a PCB design and drafts the production test for it — the sequence, the f
 
 Runs entirely in the browser. There is no server in this project, so a design file has nowhere to go even if it wanted one.
 
-**[Live demo](https://downbeatfoil.github.io/tegen/)** · load the sample board to see a worked example.
+**[Live demo](https://www.tegen.us/)** · load the sample board to see a worked example.
 
 ---
 

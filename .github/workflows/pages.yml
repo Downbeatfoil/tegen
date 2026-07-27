@@ -27,10 +27,10 @@ jobs:
 
       - run: npm ci
 
+      # Vite is configured with a relative base, which works both at the custom
+      # domain root and at the github.io project subpath. Don't pin BASE_PATH
+      # here unless the deploy target is known to be a fixed subpath.
       - name: Build
-        # Pages serves the site from /<repo>/, so the asset base has to match.
-        env:
-          BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build
 
       - uses: actions/configure-pages@v5
