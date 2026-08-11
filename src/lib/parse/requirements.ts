@@ -2,12 +2,13 @@
  * Turns written requirements into structured, numeric limits.
  *
  * "3V3 rail must remain between 3.20 V and 3.40 V" becomes
- * `{ net: "3V3", min: 3.2, max: 3.4, unit: "V", basis: "detected" }`.
+ * `{ net: "3V3", min: 3.2, max: 3.4, unit: "V", evidenceClass: "documented" }`.
  *
- * This is the part that decides whether a generated test has a real pass/fail
- * threshold or a placeholder. A sentence we can't turn into a number produces
- * an "unresolved" limit rather than a guessed one — silently inventing a
- * tolerance is how you ship a test that passes bad boards.
+ * This decides whether a generated test has a real threshold or a placeholder.
+ * A sentence that carries no number produces an `unresolved` limit, never a
+ * guessed one. Nothing in this file invents a tolerance: silently replacing a
+ * stated requirement with a convention is the worst thing the parser can do,
+ * because the output still looks specific.
  */
 
 import type { Limit, Net } from "../types";
@@ -20,10 +21,12 @@ const RANGE = new RegExp(
   String.raw`\bbetween\s+(${NUM})\s*(${UNIT})?\s*(?:and|to|through|–|—)\s*(${NUM})\s*(${UNIT})`,
   "i",
 );
-// Group positions must line up with RANGE above: number, optional unit,
-// number, unit. The reader below indexes them positionally, so a non-capturing
-// group here silently shifts every limit written as "3.2 V to 3.4 V".
+
+// Group positions must line up with RANGE: number, optional unit, number,
+// unit. The reader below indexes them positionally, so a non-capturing group
+// here silently shifts every limit written as "3.2 V to 3.4 V".
 const SPAN = new RegExp(String.raw`\b(${NUM})\s*(${UNIT})?\s*(?:–|—|-|to)\s*(${NUM})\s*(${UNIT})\b`, "i");
+
 const TOLERANCE = new RegExp(String.raw`\b(${NUM})\s*(${UNIT})\s*(?:±|\+/-|\+-)\s*(${NUM})\s*(%|${UNIT})`, "i");
 const MAXIMUM = new RegExp(
   String.raw`\b(?:under|below|less than|no more than|not exceed|at most|max(?:imum)?(?:\s+of)?|within|faster than|shorter than)\s+(${NUM})\s*(${UNIT})`,
@@ -47,20 +50,20 @@ const SCALE: Record<string, { factor: number; unit: string }> = {
   mv: { factor: 1e-3, unit: "V" },
   v: { factor: 1, unit: "V" },
   ma: { factor: 1e-3, unit: "A" },
-  "µa": { factor: 1e-6, unit: "A" },
+  µa: { factor: 1e-6, unit: "A" },
   ua: { factor: 1e-6, unit: "A" },
   a: { factor: 1, unit: "A" },
-  "kω": { factor: 1e3, unit: "Ω" },
+  kω: { factor: 1e3, unit: "Ω" },
   kohm: { factor: 1e3, unit: "Ω" },
   kohms: { factor: 1e3, unit: "Ω" },
-  "ω": { factor: 1, unit: "Ω" },
+  ω: { factor: 1, unit: "Ω" },
   ohm: { factor: 1, unit: "Ω" },
   ohms: { factor: 1, unit: "Ω" },
   mhz: { factor: 1e6, unit: "Hz" },
   khz: { factor: 1e3, unit: "Hz" },
   hz: { factor: 1, unit: "Hz" },
   ms: { factor: 1e-3, unit: "s" },
-  "µs": { factor: 1e-6, unit: "s" },
+  µs: { factor: 1e-6, unit: "s" },
   us: { factor: 1e-6, unit: "s" },
   s: { factor: 1, unit: "s" },
   sec: { factor: 1, unit: "s" },
@@ -76,8 +79,7 @@ const SCALE: Record<string, { factor: number; unit: string }> = {
 function convert(value: string, rawUnit: string | undefined): { value: number; unit: string } | null {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
-  const key = (rawUnit ?? "").toLowerCase().trim();
-  const scale = SCALE[key];
+  const scale = SCALE[(rawUnit ?? "").toLowerCase().trim()];
   if (!scale) return null;
   return { value: Number((n * scale.factor).toPrecision(6)), unit: scale.unit };
 }
@@ -86,19 +88,15 @@ function convert(value: string, rawUnit: string | undefined): { value: number; u
  * Finds which known net a requirement sentence is talking about.
  *
  * Three passes, loosening as they go. Schematic net names carry decoration
- * that prose never does — nobody writes "the +3V3 rail must stay…" — so an
- * exact-token match alone silently drops most real requirements on the floor,
- * and a dropped requirement gets replaced by an assumed limit. That is the
- * worst failure this file can have, so the matching is deliberately generous.
+ * prose never does (nobody writes "the +3V3 rail must stay..."), so an
+ * exact-token match alone drops most real requirements, and a dropped
+ * requirement leaves the rail with no stated limit at all.
  */
 function matchNet(line: string, nets: Net[]): string | undefined {
   const upper = line.toUpperCase();
   const compact = upper.replace(/[^A-Z0-9]/g, "");
-
-  // Longest first, so "3V3_MCU" wins over "3V3".
   const byName = [...nets].sort((a, b) => b.name.length - a.name.length);
 
-  // 1. Exact token: "SDA must be pulled up".
   for (const net of byName) {
     const name = net.name.toUpperCase();
     if (name.length < 2) continue;
@@ -106,14 +104,12 @@ function matchNet(line: string, nets: Net[]): string | undefined {
     if (new RegExp(String.raw`(^|[^A-Z0-9_])${escaped}([^A-Z0-9_]|$)`).test(upper)) return net.name;
   }
 
-  // 2. Ignoring decoration: net "+3V3" against the words "the 3V3 rail".
   for (const net of byName) {
     const bare = net.name.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (bare.length < 3) continue;
     if (compact.includes(bare)) return net.name;
   }
 
-  // 3. By voltage: "between 3.20 V and 3.40 V" belongs to the 3.3 V rail.
   const volts = [...upper.matchAll(/(\d{1,2}(?:[.,]\d{1,2})?)\s*V\b/g)].map((m) =>
     Number(m[1].replace(",", ".")),
   );
@@ -126,7 +122,6 @@ function matchNet(line: string, nets: Net[]): string | undefined {
   return undefined;
 }
 
-/** Short label for the limit, taken from the start of the sentence. */
 function parameterLabel(line: string, net: string | undefined, unit: string): string {
   const cleaned = line.replace(/^[-*\d.)\s]+/, "").trim();
   const subject = cleaned.split(/\s+(?:must|shall|should|has|have|is|are|needs?)\b/i)[0];
@@ -146,8 +141,8 @@ export function parseRequirements(file: string, text: string, nets: Net[]): Limi
 
     const net = matchNet(line, nets);
     const ev = [evidence(file, lines, index + 1)];
-    const push = (limit: Omit<Limit, "evidence" | "basis"> & Partial<Pick<Limit, "basis">>) => {
-      limits.push({ basis: "detected", evidence: ev, ...limit });
+    const push = (limit: Omit<Limit, "evidence" | "evidenceClass"> & Partial<Pick<Limit, "evidenceClass">>) => {
+      limits.push({ evidenceClass: "documented", evidence: ev, ...limit });
     };
 
     const range = line.match(RANGE) ?? line.match(SPAN);
@@ -156,13 +151,7 @@ export function parseRequirements(file: string, text: string, nets: Net[]): Limi
       const lo = convert(range[1], range[2] ?? unitRaw);
       const hi = convert(range[3], unitRaw);
       if (lo && hi && hi.value >= lo.value) {
-        push({
-          parameter: parameterLabel(line, net, hi.unit),
-          net,
-          min: lo.value,
-          max: hi.value,
-          unit: hi.unit,
-        });
+        push({ parameter: parameterLabel(line, net, hi.unit), net, min: lo.value, max: hi.value, unit: hi.unit });
         return;
       }
     }
@@ -172,9 +161,7 @@ export function parseRequirements(file: string, text: string, nets: Net[]): Limi
       const base = convert(tol[1], tol[2]);
       if (base) {
         const isPercent = tol[4] === "%";
-        const delta = isPercent
-          ? (base.value * Number(tol[3])) / 100
-          : (convert(tol[3], tol[4])?.value ?? 0);
+        const delta = isPercent ? (base.value * Number(tol[3])) / 100 : (convert(tol[3], tol[4])?.value ?? 0);
         push({
           parameter: parameterLabel(line, net, base.unit),
           net,
@@ -207,12 +194,7 @@ export function parseRequirements(file: string, text: string, nets: Net[]): Limi
 
     const identity = line.match(IDENTITY);
     if (identity) {
-      push({
-        parameter: parameterLabel(line, net, ""),
-        net,
-        unit: "id",
-        note: `Expected identity ${identity[1]}`,
-      });
+      push({ parameter: parameterLabel(line, net, ""), net, unit: "id", note: `Expected identity ${identity[1]}` });
       return;
     }
 
@@ -225,42 +207,23 @@ export function parseRequirements(file: string, text: string, nets: Net[]): Limi
           net,
           nominal: value.value,
           unit: value.unit,
-          note: "Nominal stated without a tolerance, so it needs a pass band before release",
+          proposedForCharacterisation: true,
+          note: "A nominal with no tolerance is not a pass band. Characterise it before using it to fail a unit.",
         });
         return;
       }
     }
 
-    // A sentence that reads like a requirement but carries no number at all.
     if (/\b(must|shall|should|required to)\b/i.test(line)) {
       push({
         parameter: parameterLabel(line, net, ""),
         net,
         unit: "",
-        basis: "unresolved",
-        note: "Stated as a requirement but no measurable threshold given",
+        evidenceClass: "unresolved",
+        note: "Stated as a requirement but with no measurable threshold.",
       });
     }
   });
 
   return limits;
-}
-
-/** Default rail windows, used only when the requirements say nothing. */
-export function inferredRailLimit(net: Net): Limit | null {
-  if (net.klass !== "power" || net.nominalV === undefined) return null;
-  // ±3% is the common regulator accuracy band; flagged inferred so it gets
-  // checked against the actual regulator datasheet before release.
-  const tol = Number((net.nominalV * 0.03).toPrecision(3));
-  return {
-    parameter: `${net.name} rail voltage`,
-    net: net.name,
-    nominal: net.nominalV,
-    min: Number((net.nominalV - tol).toPrecision(4)),
-    max: Number((net.nominalV + tol).toPrecision(4)),
-    unit: "V",
-    basis: "inferred",
-    evidence: net.evidence.slice(0, 1),
-    note: "±3% assumed from the net name. Replace with the regulator's datasheet accuracy.",
-  };
 }

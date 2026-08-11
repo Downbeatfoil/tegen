@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Basis, Confidence, Evidence } from "../lib/types";
+import type { Confidence, Evidence, EvidenceClass } from "../lib/types";
 
 /**
  * Counts a number up when it changes.
@@ -58,16 +58,31 @@ export function useCountUp(value: number, duration = 850): number {
   return display;
 }
 
-const BASIS_TITLE: Record<Basis, string> = {
-  detected: "Read directly from your design files",
-  inferred: "Assumed from a naming convention or common practice, so check it",
-  unresolved: "Nothing in the sources answers this. An engineer has to supply it",
+const CLASS_TITLE: Record<EvidenceClass, string> = {
+  detected: "Read directly out of the schematic or PCB",
+  derived: "Reasoned from read facts by a stated electrical rule. The reasoning is shown so you can check it",
+  documented: "Taken from the supplied requirements or product documentation",
+  unresolved: "Nothing in the inputs answers this. It needs the customer",
 };
 
-export function BasisBadge({ basis }: { basis: Basis }) {
+export function EvidenceBadge({ evidenceClass }: { evidenceClass: EvidenceClass }) {
   return (
-    <span className={`badge ${basis}`} title={BASIS_TITLE[basis]}>
-      {basis}
+    <span className={`badge ${evidenceClass}`} title={CLASS_TITLE[evidenceClass]}>
+      {evidenceClass}
+    </span>
+  );
+}
+
+const STANDING_TITLE: Record<string, string> = {
+  required: "A requirement backs this step",
+  proposed: "Suggested, but no requirement demands it yet",
+  optional: "Only relevant if the customer confirms the workflow",
+};
+
+export function StandingBadge({ standing }: { standing: string }) {
+  return (
+    <span className={`badge standing-${standing}`} title={STANDING_TITLE[standing]}>
+      {standing}
     </span>
   );
 }

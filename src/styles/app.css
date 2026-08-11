@@ -867,10 +867,26 @@ textarea::placeholder {
   color: var(--ok);
 }
 
-.badge.inferred {
+.badge.derived {
+  border-color: rgba(110, 190, 255, 0.4);
+  background: rgba(110, 190, 255, 0.12);
+  color: #6ebeff;
+}
+
+.badge.documented {
   border-color: rgba(255, 179, 64, 0.4);
   background: var(--warn-dim);
   color: var(--warn);
+}
+
+.badge.standing-required {
+  border-color: var(--line-accent);
+  color: var(--signal);
+}
+
+.badge.standing-proposed,
+.badge.standing-optional {
+  color: var(--text-faint);
 }
 
 .badge.unresolved {
@@ -968,6 +984,12 @@ textarea::placeholder {
 .step.rejected {
   border-left: 2px solid var(--danger);
   opacity: 0.5;
+}
+
+/* A step the fixture cannot execute is a defect in the plan, not a detail. */
+.step.infeasible {
+  border-color: rgba(255, 95, 72, 0.45);
+  background: rgba(255, 95, 72, 0.04);
 }
 
 .step-top {

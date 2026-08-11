@@ -5,6 +5,9 @@
 /dist
 *.tsbuildinfo
 
+# customer design files used as a test fixture; not ours to redistribute
+/.kb1
+
 # editor / OS
 .DS_Store
 Thumbs.db

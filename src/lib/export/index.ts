@@ -1,19 +1,18 @@
 /**
  * Handoff formats.
  *
- * Five shapes, because the people receiving this want different things: an
- * engineer wants the Markdown, a fixture vendor wants the pinout CSV, a CM
- * wants the test plan CSV, and whoever writes the station code wants the
- * pytest skeleton so they aren't retyping limits by hand.
+ * Every format leads with provenance, because a report that doesn't say which
+ * files and which revision it came from can be applied to the wrong board.
  */
 
-import type { Basis, Draft, Limit, TestStep } from "../types";
-import { PART_CLASS_LABEL } from "../classify";
+import type { Draft, EvidenceClass, Limit, TestStep } from "../types";
+import { SUBSYSTEM_LABEL } from "../classify";
 
-const BASIS_NOTE: Record<Basis, string> = {
+const CLASS_NOTE: Record<EvidenceClass, string> = {
   detected: "read from the design files",
-  inferred: "assumed from a naming convention or common practice",
-  unresolved: "no source for this, so an engineer has to supply it",
+  derived: "reasoned from read facts",
+  documented: "stated in the supplied requirements",
+  unresolved: "no source; needs customer confirmation",
 };
 
 const REVIEW_LABEL: Record<TestStep["review"], string> = {
@@ -23,9 +22,9 @@ const REVIEW_LABEL: Record<TestStep["review"], string> = {
   rejected: "Rejected",
 };
 
-function evidenceList(step: { evidence: { file: string; line: number }[] }): string {
-  if (!step.evidence.length) return "n/a";
-  return step.evidence.map((e) => `${e.file}:${e.line}`).join(", ");
+function evidenceList(item: { evidence: { file: string; line: number }[] }): string {
+  if (!item.evidence.length) return "n/a";
+  return item.evidence.map((e) => `${e.file}:${e.line}`).join(", ");
 }
 
 function formatLimit(limit: Limit): string {
@@ -36,121 +35,163 @@ function formatLimit(limit: Limit): string {
   return limit.note ?? "not specified";
 }
 
-export function toMarkdown(draft: Draft): string {
-  const active = draft.tests.filter((t) => t.review !== "rejected");
-  const date = new Date(draft.generatedAt).toLocaleString();
+function provenanceLines(draft: Draft): string[] {
+  const p = draft.provenance;
+  const out: string[] = [];
+  out.push("| | |");
+  out.push("|---|---|");
+  out.push(`| Project | ${p.projectName} |`);
+  out.push(`| Revision | ${p.revision ?? "not stated"}${p.filenameRevision ? ` (filename says ${p.filenameRevision})` : ""} |`);
+  if (p.company) out.push(`| Company | ${p.company} |`);
+  if (p.designDate) out.push(`| Design date | ${p.designDate} |`);
+  out.push(`| Generated | ${new Date(p.generatedAt).toLocaleString()} |`);
+  for (const f of p.files) {
+    out.push(`| Source | \`${f.name}\` (${f.kind}, ${f.size} bytes${f.hash ? `, sha256:${f.hash}` : ""}) |`);
+  }
+  return out;
+}
 
+export function toMarkdown(draft: Draft): string {
   const lines: string[] = [];
-  lines.push(`# ${draft.projectName}: production test draft`);
+  const p = draft.provenance;
+
+  lines.push(`# ${p.projectName}${p.revision ? ` rev ${p.revision}` : ""}: production test draft`);
   lines.push("");
-  lines.push(`Generated ${date} by Tegen. **This is a draft, not a release.**`);
+  lines.push("**This is a draft, not a release.**");
+  lines.push("");
+  lines.push(...provenanceLines(draft));
+  lines.push("");
+
+  if (p.revisionConflict) {
+    lines.push(`> **Revision conflict.** ${p.revisionConflict}`);
+    lines.push("");
+  }
+
+  if (draft.blocked) {
+    lines.push("## Analysis blocked");
+    lines.push("");
+    lines.push(draft.blocked);
+    lines.push("");
+    lines.push("No test plan is offered, because anything built on top of this would be guesswork.");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  const c = draft.connectivity;
+  lines.push("## Connectivity");
   lines.push("");
   lines.push(
-    `Every row below is tagged with where it came from: *detected* means it was read out of your files, *inferred* means it came from a convention, *unresolved* means nobody has supplied it yet.`,
+    `Rebuilt from ${c.wires} wires and ${c.junctions} junctions. ${c.pinsOnNet} of ${c.pinsTotal} pins resolved to a net; ${c.noConnects} are marked no-connect.`,
   );
   lines.push("");
 
-  lines.push("## Snapshot");
+  lines.push("## Subsystems");
   lines.push("");
-  lines.push(`| | |`);
-  lines.push(`|---|---|`);
-  lines.push(`| Readiness | ${draft.readiness.score}/100, ${draft.readiness.label} |`);
-  lines.push(`| Functional coverage | ${draft.coverage.percent}% (${draft.coverage.coveredCount} of ${draft.coverage.testablePartCount} testable parts) |`);
-  lines.push(`| Steps | ${active.length} |`);
-  lines.push(`| Estimated cycle | ${draft.estCycleSeconds}s, excluding handling |`);
-  lines.push(`| Open risks | ${draft.risks.length} |`);
-  lines.push(`| Sources | ${draft.sourceFiles.map((f) => f.name).join(", ") || "none"} |`);
-  lines.push("");
-
-  for (const factor of draft.readiness.factors) {
-    lines.push(`- **${factor.label}** ${factor.score}/${factor.max}: ${factor.detail}`);
+  lines.push("| Subsystem | Present | Basis | Detail |");
+  lines.push("|---|---|---|---|");
+  for (const s of draft.subsystems) {
+    lines.push(`| ${s.label} | ${s.present ? "yes" : "not found"} | ${s.evidenceClass} | ${s.detail} |`);
   }
   lines.push("");
 
   lines.push("## Test sequence");
   lines.push("");
-  lines.push("| ID | Test | Access | Stimulus | Pass criterion | Instrument | Basis | Confidence | Evidence |");
-  lines.push("|---|---|---|---|---|---|---|---|---|");
-  for (const test of active) {
+  for (const t of draft.tests.filter((x) => x.review !== "rejected")) {
+    lines.push(`### ${t.id}. ${t.name}`);
+    lines.push("");
+    lines.push(`- **Subsystem:** ${SUBSYSTEM_LABEL[t.subsystem]}`);
+    lines.push(`- **Purpose:** ${t.purpose}`);
+    lines.push(`- **Access:** ${t.access}`);
+    lines.push(`- **Equipment:** ${t.needsEquipment.join(", ") || "none"}${t.needsFirmware ? ", manufacturing firmware" : ""}`);
+    lines.push(`- **Procedure:** ${t.stimulus}`);
+    lines.push(`- **Expected:** ${t.expected}`);
+    lines.push(`- **Standing:** ${t.standing}`);
+    lines.push(`- **Evidence class:** ${t.evidenceClass} (${CLASS_NOTE[t.evidenceClass]})`);
+    lines.push(`- **Confidence:** ${t.confidence}`);
+    lines.push(`- **Source:** ${evidenceList(t)}`);
+    lines.push(`- **Fixture:** ${t.feasible ? "can run" : "CANNOT RUN"}. ${t.feasibilityNote}`);
+    if (t.satisfies.length) lines.push(`- **Satisfies:** ${t.satisfies.join(", ")}`);
+    if (t.assumptions.length) lines.push(`- **Assumptions:** ${t.assumptions.join(" ")}`);
+    if (t.openQuestions.length) lines.push(`- **Open questions:** ${t.openQuestions.join(" ")}`);
+    if (t.review !== "unreviewed") lines.push(`- **Review:** ${REVIEW_LABEL[t.review]}${t.note ? `. ${t.note}` : ""}`);
+    lines.push("");
+  }
+
+  lines.push("## Coverage");
+  lines.push("");
+  lines.push(`${draft.coverage.covered} of ${draft.coverage.total} required behaviours are covered (${draft.coverage.percent}%).`);
+  lines.push("");
+  lines.push(draft.coverage.basis);
+  lines.push("");
+  lines.push("| Requirement | Subsystem | Behaviour | Basis | Covered by | Why it is in the list |");
+  lines.push("|---|---|---|---|---|---|");
+  for (const r of draft.coverage.rows) {
     lines.push(
-      `| ${test.id} | ${test.name} | ${test.access} | ${test.stimulus} | ${test.expected} | ${test.instrument} | ${test.basis} | ${test.confidence} | ${evidenceList(test)} |`,
+      `| ${r.requirementId} | ${SUBSYSTEM_LABEL[r.subsystem]} | ${r.behaviour} | ${r.evidenceClass} | ${r.byTests.join(", ") || "**nothing**"} | ${r.why} |`,
     );
   }
   lines.push("");
-
-  const reviewed = draft.tests.filter((t) => t.review !== "unreviewed");
-  if (reviewed.length) {
-    lines.push("### Review state");
+  if (draft.coverage.excluded.length) {
+    lines.push("Excluded from the denominator:");
     lines.push("");
-    for (const test of reviewed) {
-      lines.push(`- **${test.id} ${test.name}**: ${REVIEW_LABEL[test.review]}${test.note ? `. ${test.note}` : ""}`);
-    }
+    for (const e of draft.coverage.excluded) lines.push(`- \`${e.ref}\`: ${e.reason}`);
     lines.push("");
   }
 
   lines.push("## Fixture interface");
   lines.push("");
-  if (draft.interfaceRows.length) {
-    lines.push("| Pin | Signal | Role | Instrument | Proposed path |");
-    lines.push("|---|---|---|---|---|");
-    for (const row of draft.interfaceRows) {
-      lines.push(`| ${row.pin} | \`${row.signal}\` | ${row.role} | ${row.instrument} | ${row.fixturePath} |`);
-    }
-  } else {
-    lines.push("_No interface signals were confidently identified._");
-  }
-  lines.push("");
-
-  lines.push("## Limits");
-  lines.push("");
-  if (draft.limits.length) {
-    lines.push("| Parameter | Net | Value | Basis | Source |");
-    lines.push("|---|---|---|---|---|");
-    for (const limit of draft.limits) {
+  if (draft.fixture.length) {
+    lines.push("| Pin | Net | Access | Side | Location | Confidence | Basis |");
+    lines.push("|---|---|---|---|---|---|---|");
+    for (const f of draft.fixture) {
+      const a = f.access;
       lines.push(
-        `| ${limit.parameter} | ${limit.net ?? "n/a"} | ${formatLimit(limit)} | ${limit.basis} | ${evidenceList(limit)} |`,
+        `| ${f.id} | \`${f.net}\` | ${a.kind}${a.ref ? ` ${a.ref}.${a.pad}` : ""} | ${a.side ?? "n/a"} | ${a.x !== undefined ? `${a.x}, ${a.y}` : "n/a"} | ${a.confidence} | ${a.reason} |`,
       );
     }
   } else {
-    lines.push("_No measurable limits were found in the requirements._");
+    lines.push("No fixture contacts are required: every step runs through the product's own interfaces.");
   }
   lines.push("");
 
-  lines.push("## Coverage gaps");
-  lines.push("");
-  const uncovered = draft.coverage.entries.filter((e) => !e.covered && !e.reason);
-  if (uncovered.length) {
-    lines.push("These parts are not exercised by any step. A board with one of them dead would pass.");
+  if (draft.limits.length) {
+    lines.push("## Limits");
     lines.push("");
-    for (const entry of uncovered) {
-      lines.push(`- \`${entry.ref}\` ${entry.value} (${PART_CLASS_LABEL[entry.klass]})`);
+    lines.push("| Parameter | Net | Value | Basis | Source |");
+    lines.push("|---|---|---|---|---|");
+    for (const l of draft.limits) {
+      lines.push(`| ${l.parameter} | ${l.net ?? "n/a"} | ${formatLimit(l)} | ${l.evidenceClass} | ${evidenceList(l)} |`);
     }
+    lines.push("");
+  }
+
+  lines.push("## Open questions");
+  lines.push("");
+  if (draft.openQuestions.length) {
+    for (const q of draft.openQuestions) lines.push(`- ${q}`);
   } else {
-    lines.push("Every testable part is touched by at least one step.");
+    lines.push("None outstanding.");
   }
   lines.push("");
 
-  lines.push("## Open risks");
+  lines.push("## Risks");
   lines.push("");
-  for (const risk of draft.risks) {
-    lines.push(`### ${risk.level.toUpperCase()}: ${risk.title}`);
+  for (const r of draft.risks) {
+    lines.push(`### ${r.level.toUpperCase()}: ${r.title}`);
     lines.push("");
-    lines.push(risk.detail);
+    lines.push(r.detail);
     lines.push("");
-    lines.push(`**Next:** ${risk.action}`);
-    if (risk.evidence.length) lines.push(`  \n_Source: ${evidenceList(risk)}_`);
+    lines.push(`**Next:** ${r.action}`);
     lines.push("");
   }
 
   lines.push("## Assumptions");
   lines.push("");
-  for (const item of draft.assumptions) lines.push(`- ${item}`);
+  for (const a of draft.assumptions) lines.push(`- ${a}`);
   lines.push("");
   lines.push("---");
   lines.push("");
-  lines.push(
-    "Reviewed by: ______________________  Date: ____________  \nA qualified engineer owns the final limits, the safety case, and the release decision.",
-  );
+  lines.push("Reviewed by: ______________________  Date: ____________");
   lines.push("");
 
   return lines.join("\n");
@@ -161,29 +202,31 @@ function csvCell(value: string | number | undefined): string {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function csvRows(rows: (string | number | undefined)[][]): string {
-  return rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-}
+const csvRows = (rows: (string | number | undefined)[][]) =>
+  rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 
 export function toTestPlanCsv(draft: Draft): string {
   const rows: (string | number | undefined)[][] = [
-    ["ID", "Test", "Purpose", "Access", "Stimulus", "Pass criterion", "Instrument", "Basis", "Confidence", "Est. seconds", "Covers", "Review", "Evidence"],
+    ["ID", "Subsystem", "Test", "Purpose", "Access", "Procedure", "Expected", "Equipment", "Standing", "Evidence class", "Confidence", "Feasible", "Satisfies", "Covers", "Review", "Source"],
   ];
-  for (const test of draft.tests) {
+  for (const t of draft.tests) {
     rows.push([
-      test.id,
-      test.name,
-      test.purpose,
-      test.access,
-      test.stimulus,
-      test.expected,
-      test.instrument,
-      test.basis,
-      test.confidence,
-      test.estSeconds,
-      test.covers.join(" "),
-      REVIEW_LABEL[test.review],
-      evidenceList(test),
+      t.id,
+      SUBSYSTEM_LABEL[t.subsystem],
+      t.name,
+      t.purpose,
+      t.access,
+      t.stimulus,
+      t.expected,
+      t.needsEquipment.join(" "),
+      t.standing,
+      t.evidenceClass,
+      t.confidence,
+      t.feasible ? "yes" : "no",
+      t.satisfies.join(" "),
+      t.covers.join(" "),
+      REVIEW_LABEL[t.review],
+      evidenceList(t),
     ]);
   }
   return csvRows(rows);
@@ -191,10 +234,29 @@ export function toTestPlanCsv(draft: Draft): string {
 
 export function toPinoutCsv(draft: Draft): string {
   const rows: (string | number | undefined)[][] = [
-    ["Fixture pin", "Signal", "Net", "Role", "Instrument", "Proposed path", "Evidence"],
+    ["Fixture pin", "Net", "Access kind", "Ref", "Pad", "Side", "X (mm)", "Y (mm)", "Size (mm)", "Confidence", "Basis"],
   ];
-  for (const row of draft.interfaceRows) {
-    rows.push([row.pin, row.signal, row.net, row.role, row.instrument, row.fixturePath, evidenceList(row)]);
+  for (const f of draft.fixture) {
+    const a = f.access;
+    rows.push([f.id, f.net, a.kind, a.ref, a.pad, a.side, a.x, a.y, a.sizeMm, a.confidence, a.reason]);
+  }
+  return csvRows(rows);
+}
+
+export function toCoverageCsv(draft: Draft): string {
+  const rows: (string | number | undefined)[][] = [
+    ["Requirement", "Subsystem", "Behaviour", "Evidence class", "Covered", "By tests", "Why it is required"],
+  ];
+  for (const r of draft.coverage.rows) {
+    rows.push([
+      r.requirementId,
+      SUBSYSTEM_LABEL[r.subsystem],
+      r.behaviour,
+      r.evidenceClass,
+      r.covered ? "yes" : "no",
+      r.byTests.join(" "),
+      r.why,
+    ]);
   }
   return csvRows(rows);
 }
@@ -203,134 +265,87 @@ export function toJson(draft: Draft): string {
   return JSON.stringify(draft, null, 2);
 }
 
-/** snake_case identifier safe for Python. */
-function pyName(text: string): string {
-  const slug = text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return /^\d/.test(slug) ? `t_${slug}` : slug || "step";
-}
-
-function pyStr(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
+const pyName = (t: string) => {
+  const s = t.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return /^\d/.test(s) ? `t_${s}` : s || "step";
+};
+const pyStr = (t: string) => t.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
 export function toPytest(draft: Draft): string {
-  const active = draft.tests.filter((t) => t.review !== "rejected");
   const out: string[] = [];
-
-  // Assign one stable dict key per limit up front. Two limits on the same net
-  // would otherwise collide and Python would silently keep only the last.
-  const limitKeys = new Map<Limit, string>();
-  const usedKeys = new Set<string>();
-  for (const limit of draft.limits) {
-    const base = pyName(limit.net ?? limit.parameter) || "limit";
-    let key = base;
-    let suffix = 2;
-    while (usedKeys.has(key)) key = `${base}_${suffix++}`;
-    usedKeys.add(key);
-    limitKeys.set(limit, key);
-  }
+  const p = draft.provenance;
 
   out.push('"""');
-  out.push(`${draft.projectName}: production test sequence.`);
+  out.push(`${p.projectName}${p.revision ? ` rev ${p.revision}` : ""}: production test sequence.`);
   out.push("");
-  out.push(`Generated by Tegen on ${new Date(draft.generatedAt).toISOString().slice(0, 10)}.`);
+  out.push(`Generated by Tegen on ${new Date(p.generatedAt).toISOString().slice(0, 10)} from:`);
+  for (const f of p.files) out.push(`  ${f.name}${f.hash ? ` (sha256:${f.hash})` : ""}`);
   out.push("");
-  out.push("DRAFT. Before this runs against real hardware:");
-  out.push("  - replace every limit marked INFERRED or UNRESOLVED with a real number");
-  out.push("  - implement the `dut` fixture against your actual instruments");
+  out.push("DRAFT. Before this runs against hardware:");
+  out.push("  - supply a real threshold anywhere this file says UNRESOLVED");
+  out.push("  - implement the dut fixture against your own equipment");
   out.push("  - prove it on a known-good board, then on a known-bad one");
   out.push('"""');
   out.push("");
   out.push("import pytest");
   out.push("");
   out.push("");
-  out.push("# Limits pulled from the design evidence and requirements.");
-  out.push("# Each entry says where it came from. Check anything not marked DETECTED.");
+
+  const banded = draft.limits.filter((l) => l.min !== undefined && l.max !== undefined);
+  out.push("# Only limits with a real source appear here. Nothing is invented.");
   out.push("LIMITS = {");
-  if (draft.limits.length) {
-    for (const limit of draft.limits) {
-      const key = limitKeys.get(limit)!;
-      const parts: string[] = [];
-      if (limit.min !== undefined) parts.push(`"min": ${limit.min}`);
-      if (limit.max !== undefined) parts.push(`"max": ${limit.max}`);
-      if (limit.nominal !== undefined) parts.push(`"nominal": ${limit.nominal}`);
-      parts.push(`"unit": "${pyStr(limit.unit)}"`);
-      const comment = `${limit.basis.toUpperCase()} (${BASIS_NOTE[limit.basis]})`;
-      out.push(`    "${key}": {${parts.join(", ")}},  # ${comment}`);
+  if (banded.length) {
+    const used = new Set<string>();
+    for (const l of banded) {
+      let k = pyName(l.net ?? l.parameter);
+      while (used.has(k)) k = `${k}_2`;
+      used.add(k);
+      out.push(`    "${k}": {"min": ${l.min}, "max": ${l.max}, "unit": "${pyStr(l.unit)}"},  # ${l.evidenceClass.toUpperCase()}`);
     }
   } else {
-    out.push("    # No measurable limits were found in the requirements.");
+    out.push("    # No banded limits were supplied. Every threshold below is unresolved.");
   }
   out.push("}");
   out.push("");
   out.push("");
-  out.push("@pytest.fixture(scope=\"session\")");
+  out.push('@pytest.fixture(scope="session")');
   out.push("def dut():");
-  out.push('    """The board under test, plus the instruments pointed at it.');
-  out.push("");
-  out.push("    Implement against your own hardware. It needs at least:");
-  out.push("      measure_voltage(net) -> float");
-  out.push("      program(image_path) -> str   # returns the readback checksum");
-  out.push("      scan_i2c() -> list[int]");
-  out.push("      read_id(device) -> int");
-  out.push('    """');
-  out.push('    raise NotImplementedError("wire up the PSU, DMM and programmer here")');
+  out.push('    """Board under test plus the equipment pointed at it."""');
+  out.push('    raise NotImplementedError("wire up the station here")');
   out.push("");
 
-  for (const test of active) {
-    const name = `test_${pyName(test.id)}_${pyName(test.name)}`.slice(0, 90);
+  for (const t of draft.tests.filter((x) => x.review !== "rejected")) {
     out.push("");
-    out.push(`def ${name}(dut):`);
+    out.push(`def test_${pyName(t.id)}_${pyName(t.name)}(dut):`.slice(0, 95));
     out.push('    """');
-    out.push(`    ${test.purpose}`);
+    out.push(`    ${t.purpose}`);
     out.push("");
-    out.push(`    Access:     ${test.access}`);
-    out.push(`    Stimulus:   ${test.stimulus}`);
-    out.push(`    Expected:   ${test.expected}`);
-    out.push(`    Instrument: ${test.instrument}`);
-    out.push(`    Basis:      ${test.basis.toUpperCase()} (${BASIS_NOTE[test.basis]})`);
-    out.push(`    Confidence: ${test.confidence}`);
-    out.push(`    Evidence:   ${evidenceList(test)}`);
-    if (test.covers.length) out.push(`    Covers:     ${test.covers.join(", ")}`);
+    out.push(`    Subsystem:  ${SUBSYSTEM_LABEL[t.subsystem]}`);
+    out.push(`    Access:     ${t.access}`);
+    out.push(`    Procedure:  ${t.stimulus}`);
+    out.push(`    Expected:   ${t.expected}`);
+    out.push(`    Standing:   ${t.standing}`);
+    out.push(`    Basis:      ${t.evidenceClass} (${CLASS_NOTE[t.evidenceClass]})`);
+    out.push(`    Source:     ${evidenceList(t)}`);
+    out.push(`    Fixture:    ${t.feasible ? "can run" : "CANNOT RUN as specified"}`);
+    for (const q of t.openQuestions) out.push(`    Open:       ${q}`);
     out.push('    """');
 
-    const railLimit = draft.limits.find(
-      (l) => l.unit === "V" && l.net && test.nets.some((n) => n.toUpperCase() === l.net!.toUpperCase()),
-    );
-
-    if (test.ruleId.startsWith("power-rail:") && railLimit?.min !== undefined && railLimit.max !== undefined) {
-      const key = limitKeys.get(railLimit)!;
-      out.push(`    limit = LIMITS["${key}"]`);
+    const railLimit = banded.find((l) => l.net && t.nets.includes(l.net));
+    if (!t.feasible) {
+      out.push(`    pytest.skip("fixture cannot reach what this step needs: ${pyStr(t.feasibilityNote)}")`);
+    } else if (t.ruleId.startsWith("rail:") && railLimit) {
+      const k = pyName(railLimit.net ?? railLimit.parameter);
+      out.push(`    limit = LIMITS["${k}"]`);
       out.push(`    measured = dut.measure_voltage("${pyStr(railLimit.net ?? "")}")`);
-      out.push(`    assert limit["min"] <= measured <= limit["max"], (`);
+      out.push('    assert limit["min"] <= measured <= limit["max"], (');
       out.push(`        f'${pyStr(railLimit.net ?? "rail")} measured {measured} V, '`);
-      out.push(`        f'expected {limit["min"]}-{limit["max"]} V'`);
+      out.push('        f\'expected {limit["min"]}-{limit["max"]} V\'');
       out.push("    )");
-      if (railLimit.basis !== "detected") {
-        out.push(`    # WARNING: this band is ${railLimit.basis}, not from your requirements.`);
-      }
-    } else if (test.ruleId === "program-controller") {
-      out.push('    checksum = dut.program("firmware/production.bin")');
-      out.push('    assert checksum == EXPECTED_CHECKSUM, f"readback {checksum}"');
-      out.push('    # TODO: set EXPECTED_CHECKSUM from your build output.');
-    } else if (test.ruleId === "i2c-scan") {
-      const idLimit = draft.limits.find((l) => l.unit === "id");
-      out.push("    found = dut.scan_i2c()");
-      if (idLimit?.note) {
-        out.push(`    # ${pyStr(idLimit.note)}`);
-        out.push("    expected = EXPECTED_I2C_ADDRESSES");
-        out.push('    missing = [a for a in expected if a not in found]');
-        out.push('    assert not missing, f"no answer from {[hex(a) for a in missing]}"');
-      } else {
-        out.push('    pytest.skip("TODO: list the expected I2C addresses, none were stated")');
-      }
-    } else if (test.basis === "unresolved") {
-      out.push(`    pytest.skip("UNRESOLVED: ${pyStr(test.expected)}")`);
+    } else if (t.evidenceClass === "unresolved") {
+      out.push(`    pytest.skip("UNRESOLVED: ${pyStr(t.expected)}")`);
     } else {
-      out.push(`    pytest.skip("TODO: implement. ${pyStr(test.stimulus)}")`);
+      out.push(`    pytest.skip("TODO: implement. ${pyStr(t.stimulus)}")`);
     }
     out.push("");
   }
@@ -344,17 +359,13 @@ export interface ExportFile {
   mime: string;
 }
 
-function slug(text: string): string {
-  return (
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "board"
-  );
-}
+const slug = (t: string) =>
+  t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "board";
 
-export function buildExport(draft: Draft, format: "md" | "json" | "csv" | "pinout" | "pytest"): ExportFile {
-  const base = slug(draft.projectName);
+export type ExportFormat = "md" | "json" | "csv" | "pinout" | "coverage" | "pytest";
+
+export function buildExport(draft: Draft, format: ExportFormat): ExportFile {
+  const base = slug(`${draft.provenance.projectName}${draft.provenance.revision ? `-rev${draft.provenance.revision}` : ""}`);
   switch (format) {
     case "md":
       return { filename: `${base}-test-draft.md`, content: toMarkdown(draft), mime: "text/markdown" };
@@ -364,6 +375,8 @@ export function buildExport(draft: Draft, format: "md" | "json" | "csv" | "pinou
       return { filename: `${base}-test-plan.csv`, content: toTestPlanCsv(draft), mime: "text/csv" };
     case "pinout":
       return { filename: `${base}-fixture-pinout.csv`, content: toPinoutCsv(draft), mime: "text/csv" };
+    case "coverage":
+      return { filename: `${base}-coverage-matrix.csv`, content: toCoverageCsv(draft), mime: "text/csv" };
     case "pytest":
       return { filename: `test_${pyName(base)}.py`, content: toPytest(draft), mime: "text/x-python" };
   }
@@ -372,11 +385,11 @@ export function buildExport(draft: Draft, format: "md" | "json" | "csv" | "pinou
 export function download(file: ExportFile): void {
   const blob = new Blob([file.content], { type: `${file.mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = file.filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

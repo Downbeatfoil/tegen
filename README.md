@@ -1,76 +1,57 @@
 # Tegen
 
-Reads a PCB design and drafts the production test for it — the sequence, the fixture pinout, the pass/fail limits, and the list of parts nothing tests. Then it shows you the file and line behind every claim, so you can argue with it instead of trusting it.
+Reads a KiCad project, rebuilds the board's connectivity, and drafts the production test for it. Every claim says where it came from, and anything the design files cannot answer is listed as a question rather than filled in.
 
 Runs entirely in the browser. There is no server in this project, so a design file has nowhere to go even if it wanted one.
 
-**[Live demo](https://www.tegen.us/)** · load the sample board to see a worked example.
+**[Live demo](https://www.tegen.us/)**
 
 ---
 
-## The problem
+## The idea
 
-When a board goes from working prototype to production, someone senior has to turn bench knowledge into a repeatable factory process: decide what proves a board can ship, find the signals a fixture can reach, define instruments and limits, and get all of it written down clearly enough that a contract manufacturer or fixture vendor can act on it.
+Most of what a production test needs is already in the schematic. Not as a list, though: as geometry. Wires, junctions, pin positions. So the first job is to rebuild the netlist the way KiCad does, and the second is to be honest about everything that *isn't* in there.
 
-That usually happens under an NPI deadline, in a spreadsheet, from scratch, every time.
+A report that looks specific and is electrically wrong is worse than no report. That principle drives the design more than any feature does.
 
-Most of the information needed is already sitting in the netlist. Tegen reads it out.
+## How it works
 
-## What it actually does
+**Connectivity first.** A `.kicad_sch` carries full connectivity, but geometrically. Tegen places every pin in sheet coordinates (rotation, mirroring, multi-unit symbols), then unions pins, wires, junctions and labels into nets. A pin touching a wire anywhere along its length connects, with no junction needed, so endpoint-only matching silently drops connections. Same-named power symbols and global labels merge into one net.
 
-**Parses the design.** A real S-expression reader for KiCad `.kicad_sch` and `.net` exports, a BOM reader that sniffs CSV/TSV headers and expands `R1-R7` ranges, and a plain-text netlist fallback. A netlist is the useful one — it carries which pin of which part every signal lands on, so the fixture map is read rather than guessed.
+The pin transform was not taken from memory. Every plausible convention was scored against a real board, keeping the one that actually landed pins on wires.
 
-**Pulls limits out of prose.** "The 3V3 rail must remain between 3.20 V and 3.40 V" becomes `{min: 3.2, max: 3.4, unit: "V"}`, attached to the `+3V3` net. Units are normalised, so `120 mA` and `0.12 A` are the same limit.
+**If connectivity fails, everything stops.** The project is reported blocked. No subsystems, no tests, no coverage number. Anything built on unresolved connectivity would look specific and be guesswork.
 
-**Generates a sequence from connectivity.** 16 rules, each of which looks at the merged design and either produces steps or stays quiet. A CAN step only appears if there's a transceiver on a CAN net.
-
-**Labels every claim.** Three states, and the distinction is the whole point:
+**Four evidence classes**, and they gate what the tool may assert:
 
 | | |
 |---|---|
-| `detected` | read out of your files |
-| `inferred` | assumed from a naming convention — check it |
-| `unresolved` | nothing answers this; an engineer has to supply it |
+| `detected` | read out of the schematic or PCB |
+| `derived` | reasoned from read facts by a stated rule, with the reasoning shown |
+| `documented` | stated in the supplied requirements |
+| `unresolved` | nothing answers this; it needs the customer |
 
-A stated nominal with no tolerance ("accepts 5 V") counts as a gap, not a limit. There's nothing there a test could fail a board on.
+`derived` exists because plenty of solid facts are neither read verbatim nor guessed. An I²C address strapped by A0/A1/A2 tied to GND is arrived at by electrical reasoning over read facts, and the tool shows the strapping so you can check it.
 
-**Finds what nothing tests.** Coverage is computed over parts a functional test could plausibly target. Passives and test points are excluded from the denominator on purpose — claiming 4% because a board has 200 decoupling caps would be noise.
+**Physical access comes from the PCB, never from a schematic net.** A net can exist and have nowhere a probe can reach. Tegen reads pads and vias, and KiCad states via tenting explicitly, so "this via is exposed" is a read fact. No PCB supplied means access is reported as unconfirmed, not assumed.
 
-**Takes corrections.** Every step can be edited, accepted, flagged or dropped. Rejecting a step recomputes coverage and cycle time. The corrections export with the spec, because they're the useful output.
+**The fixture is checked against the plan.** Every step declares the contacts, equipment and firmware it needs. A step whose nets have no confirmed probe target is marked as unable to run, and that is a defect in the plan rather than a footnote.
+
+**Coverage is over required behaviours, not part counts.** Each row states the behaviour, where the requirement came from, and what covers it. Logos, mounting holes and passives are not behaviours and are excluded, with the exclusions listed.
+
+**Nothing numeric is invented.** No tolerance, no cycle time, no readiness score. If a rail has no stated pass band, the step says so and asks for one. A nominal with no tolerance is flagged as needing characterisation rather than promoted to a limit.
+
+**Project isolation.** Name and revision come from the schematic title block, then the filename, and only then from what you typed. They are never inherited from a previous run. A revision stated in the schematic that disagrees with the filename is flagged. New files clear any existing draft.
 
 ## Exports
 
-| Format | For |
-|---|---|
-| Markdown | the engineer reviewing it, with a sign-off line |
-| JSON | re-importing, or feeding something else |
-| Test plan CSV | the contract manufacturer |
-| Fixture pinout CSV | the fixture vendor |
-| `pytest` skeleton | whoever writes the station code |
-
-The pytest export is a real file with your limits already in it:
-
-```python
-LIMITS = {
-    "t_3v3": {"min": 3.2, "max": 3.4, "unit": "V"},  # DETECTED — read from the design files
-    "vbus":  {"nominal": 5.0, "unit": "V"},          # INFERRED — assumed from a naming convention
-}
-
-def test_t04_t_3v3_rail_check(dut):
-    limit = LIMITS["t_3v3"]
-    measured = dut.measure_voltage("+3V3")
-    assert limit["min"] <= measured <= limit["max"], (
-        f'+3V3 measured {measured} V, expected {limit["min"]}-{limit["max"]} V'
-    )
-```
-
-Steps with no resolvable limit emit `pytest.skip("UNRESOLVED: …")` rather than a guessed assertion.
+Markdown spec, JSON, test-plan CSV, fixture-pinout CSV, coverage-matrix CSV, and a `pytest` skeleton. All of them lead with provenance: file names, sizes and SHA-256, so a report can be tied to exact inputs. Steps the fixture can't run emit a skip rather than an assertion.
 
 ## What it deliberately doesn't do
 
-Fixture mechanics, Gerbers, probe force, tooling plates. Driving instruments or applying power to anything. Signing off RF, safety or regulatory limits. Deciding a board is good enough to ship.
+Fixture mechanics, Gerbers, probe force, tooling plates. Driving instruments or applying power. Signing off RF, safety or regulatory limits. Deciding a board is good enough to ship.
 
-The output is a draft. A qualified engineer owns the final limits, the safety case, and the release decision.
+The output is a draft. A qualified engineer owns the final limits and the release decision.
 
 ## Running it
 
@@ -79,41 +60,36 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:5173 and hit **Run the sample board**.
+```bash
+npm run build   # production build
+npm run check   # typecheck
+npm test        # acceptance tests
+```
+
+### Test fixture
+
+The acceptance suite runs against the public PocketMidi KB1 design, which is not committed here because it isn't ours to redistribute. The tests skip cleanly without it. To run them:
 
 ```bash
-npm run build     # production build into dist/
-npm run check     # typecheck only
+curl -L -o kb1.zip https://raw.githubusercontent.com/PocketMidi/KB1/main/hardware/electronics/KB1_KiCad.zip && unzip kb1.zip -d .kb1/extracted
 ```
 
-## How it's put together
+The suite pins a golden connectivity set checked by hand against the schematic (shared I²C bus, supply rails, address strapping, the slide switch reaching the amplifier shutdown pin), so a regression in the geometry fails here rather than in a customer's report. It also asserts the negatives: no invented oscillator, no antenna-feed access, no provisioning requirements, no readiness score, and no content carried over between projects.
+
+## Layout
 
 ```
-src/
-  lib/
-    types.ts          data model — Evidence, Basis, TestStep, Draft
-    classify.ts       net and part classification from naming conventions
-    parse/
-      sexpr.ts        S-expression reader that tracks line numbers
-      kicad.ts        .kicad_sch symbols/labels, .net components/nets/nodes
-      bom.ts          CSV/TSV with header sniffing and range expansion
-      netlist.ts      plain-text netlists
-      requirements.ts prose to structured numeric limits
-      index.ts        format detection and merging by designator
-    analyze/
-      rules.ts        the 16 generation rules and the design context
-      index.ts        coverage, DFT risks, readiness scoring
-    export/           markdown, json, csv, pinout, pytest
-  components/         Scope, InputPanel, DraftView
+src/lib/
+  types.ts              data model and evidence classes
+  classify.ts           part and net classification
+  parse/
+    sexpr.ts            S-expression reader that tracks line numbers
+    kicadGraph.ts       connectivity resolver
+    kicadPcb.ts         pads, vias and tenting for physical access
+    requirements.ts     prose to structured numeric limits
+  analyze/index.ts      subsystems, requirements, tests, fixture, coverage
+  export/index.ts       markdown, json, csv, pytest
 ```
-
-Line numbers are threaded from the tokenizer all the way to the UI. That's what makes `rover-sense.net:60` clickable-in-principle next to a claim, and it's the reason the S-expression reader tracks position rather than using a stock parser.
-
-## Notes on accuracy
-
-The classifiers are heuristics over naming conventions and they are wrong sometimes — a net called `CS` might be chip-select or current-sense. Anything that depends on a guess is labelled `inferred` rather than `detected`, which is the honest version of a confidence score.
-
-Requirement-to-net matching is deliberately generous (three passes, loosening as they go). Schematic net names carry decoration that prose never does — nobody writes "the +3V3 rail must stay…" — and a dropped requirement gets silently replaced by an assumed limit, which is the worst thing this codebase can do.
 
 ## Licence
 
